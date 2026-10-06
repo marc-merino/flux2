@@ -239,9 +239,40 @@ For a list of the Flux objects that emit events, see the kinds allowed on the
 
 To disable the feature, do not use `event.toolkit.fluxcd.io/` as a prefix in Flux object annotations.
 
+## CEL-Computed Metadata
+
+An extension to this proposal introduces the special annotation
+`event.toolkit.fluxcd.io/metadata`. Its value is a CEL expression evaluated against the
+annotated object, available as the variable `obj` (`obj.metadata`, `obj.spec`,
+`obj.status`). The expression must return a map of string keys to string values. Each
+entry `k: v` is added to every event the object emits as metadata key `k`, as if the
+object had the annotation `event.toolkit.fluxcd.io/<k>: <v>`:
+
+```yaml
+metadata:
+  annotations:
+    event.toolkit.fluxcd.io/metadata: |
+      {"env": obj.metadata.labels["env"], "revision": obj.status.lastAppliedRevision}
+```
+
+Explicit `event.toolkit.fluxcd.io/<k>` annotations win over computed entries with the
+same key. The `event.toolkit.fluxcd.io/metadata` annotation itself is not sent as
+metadata. Keys that are empty or contain `/` are skipped. If the expression fails to
+compile or evaluate, or does not return a map of strings, the event is still sent
+without the computed entries and the controller logs the error.
+
+Map literals must have values of a single type, so wrap object fields in `string()`
+when mixing them with string literals, for example
+`{"env": "production", "name": string(obj.metadata.name)}`.
+
+The extension is implemented in the `events` package of `github.com/fluxcd/pkg/runtime`
+and takes effect in each controller when it bumps that module.
+
 ## Implementation History
 
 * RFC implemented and generally available in Flux v2.5.
+* CEL-computed metadata from the `event.toolkit.fluxcd.io/metadata` annotation proposed
+  in fluxcd/flux2#5946.
 
 <!--
 Major milestones in the lifecycle of the RFC such as:
